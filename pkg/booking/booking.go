@@ -2,26 +2,22 @@ package booking
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 
+	"github.com/zfirdavs/hotel-booking-test-task/pkg/logger"
 	"github.com/zfirdavs/hotel-booking-test-task/pkg/model"
 	"github.com/zfirdavs/hotel-booking-test-task/pkg/storage"
 )
 
 type HotelRoomBookingService struct {
-	Orders       []model.Order
-	Logger       *log.Logger
+	Logger       logger.Log
 	Availability storage.Storage
 }
 
-func NewHotelRoomBookingService(storage storage.Storage) *HotelRoomBookingService {
+func NewHotelRoomBookingService(storage storage.Storage, log logger.Log) *HotelRoomBookingService {
 	return &HotelRoomBookingService{
-		Orders:       []model.Order{},
-		Logger:       log.New(os.Stdout, "", log.LstdFlags),
+		Logger:       log,
 		Availability: storage,
 	}
 }
@@ -37,35 +33,34 @@ func (s *HotelRoomBookingService) CreateOrder(w http.ResponseWriter, r *http.Req
 	unavailableDays := s.Availability.FindUnavailableDays(newOrder.From, newOrder.To)
 	if len(unavailableDays) != 0 {
 		s.handleError(w,
-			errors.New("Hotel room is not available for selected dates"),
-			fmt.Sprintf("Your order: %v has unvailable days: %v", newOrder, unavailableDays))
+			fmt.Errorf("hotel room is not available for selected dates: %v", unavailableDays),
+			fmt.Sprintf("Order: %v has unvailable days: %v", newOrder, unavailableDays),
+		)
 		return
 	}
 
 	s.Availability.BookRooms(newOrder.From, newOrder.To)
 
-	s.Orders = append(s.Orders, newOrder)
-
 	s.respondWithJSON(w, http.StatusCreated, newOrder)
-	s.LogInfo("Order successfully created", newOrder)
+	s.LogInfo("Order successfully created", "order_info", newOrder)
 
 }
 
 func (s *HotelRoomBookingService) handleError(w http.ResponseWriter, err error, message string) {
-	s.LogError(message, err)
-	http.Error(w, message, http.StatusInternalServerError)
+	s.LogError(message)
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
-func (s *HotelRoomBookingService) respondWithJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+func (s *HotelRoomBookingService) respondWithJSON(w http.ResponseWriter, statusCode int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(data)
 }
 
-func (s *HotelRoomBookingService) LogInfo(message string, v ...interface{}) {
-	s.Logger.Printf("[Info]: %s %v\n", message, v)
+func (s *HotelRoomBookingService) LogInfo(message string, v ...any) {
+	s.Logger.Info(message, v...)
 }
 
-func (s *HotelRoomBookingService) LogError(message string, v ...interface{}) {
-	s.Logger.Printf("[Error]: %s %v\n", message, v)
+func (s *HotelRoomBookingService) LogError(message string, v ...any) {
+	s.Logger.Error(message, v...)
 }
