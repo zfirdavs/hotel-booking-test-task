@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/zfirdavs/hotel-booking-test-task/pkg/booking"
+	"github.com/zfirdavs/hotel-booking-test-task/pkg/logger"
 	"github.com/zfirdavs/hotel-booking-test-task/pkg/storage"
 )
 
@@ -18,16 +19,24 @@ func main() {
 
 	availability := storage.NewAvailability()
 
-	service := booking.NewHotelRoomBookingService(availability)
+	jsonLogger := logger.NewJSONLogger(os.Stdout)
+
+	service := booking.NewHotelRoomBookingService(availability, jsonLogger)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/orders", service.CreateOrder)
 
-	service.LogInfo("Server listening on localhost", port)
-	err := http.ListenAndServe(":"+port, mux)
+	jsonLogger.Info("Server listening on localhost", "port", port)
+
+	server := &http.Server{
+		Handler: mux,
+		Addr:    ":" + port,
+	}
+
+	err := server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
-		service.LogInfo("Server closed")
+		jsonLogger.Info("Server closed")
 	} else if err != nil {
-		service.LogError("Server failed", err)
+		jsonLogger.Error("Server failed", err)
 		os.Exit(1)
 	}
 }
